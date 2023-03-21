@@ -1,0 +1,123 @@
+##The following POC is to show how an icon can be delivered to a user's app launcher depending on what type of PC they're logged into.
+##User's will need to be told to always launch the same icon for Epic Production.
+##We will control what is behind that icon so the decision is seemless to the end-user
+##
+##Variables for If/Else Statements
+##
+##
+$osVersion = (systeminfo | Select-String 'OS Name:').ToString().Split(':')[1].Trim()
+$computer = Get-CimInstance CIM_ComputerSystem
+$ramString = ("{0:N2}" -f ($computer.TotalPhysicalMemory/1GB))
+$ram = [int]$ramString
+$cpu = Get-WmiObject win32_processor
+##$cpuname = $cpu.Name
+$cpuCore = $cpu.NumberOfCores
+##$cputhreads = $cpu.NumberOfLogicalProcessors
+$cpuClock = $cpu.MaxClockSpeed
+$name = $env:computername
+##
+##
+##Variables for launchers
+$ctx = 'C:\Program Files (x86)\Citrix\ICA Client\SelfServicePlugin\SelfService.exe'
+$ctxEpic = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\PublishedEpicAppName'
+$fullEpic = 'C:\Program Files (x86)\Epic\Hyperdrive\Hyperspace\Hyperspace.exe'
+$path = 'Desktop\Epic Production.lnk'
+##
+##
+##The following function will write individual logs with system specs
+##
+##
+function Write-Log {
+#$outputFile = "\\UNCPATH\HyperdrivePOC\$name.csv"
+$outputFile = "c:\temp\$name.csv"
+# Grab computer info
+$computerSystem = Get-CimInstance CIM_ComputerSystem
+$computerBIOS = Get-CimInstance CIM_BIOSElement
+$computerOS = Get-CimInstance CIM_OperatingSystem
+$computerCPU = Get-CimInstance CIM_Processor
+$computerHDD = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID = 'C:'"
+$computerHDDCapacity = ("{0:N2}" -f ($computerHDD.Size/1GB) + "GB")
+$computerHDDSpace = ("{0:P2}" -f ($computerHDD.FreeSpace/$computerHDD.Size) + " Free (" + "{0:N2}" -f ($computerHDD.FreeSpace/1GB) + "GB)")
+$computerRAM = ("{0:N2}" -f ($computerSystem.TotalPhysicalMemory/1GB) + "GB")
+$computerOSInfo = ($computerOS.caption + ", Service Pack: " + $computerOS.ServicePackMajorVersion)
+$time = Get-Date
+# Create Object
+$computerObject = New-Object PSObject -Property @{
+ Manufacturer = $computerSystem.Manufacturer
+ Model = $computerSystem.Model
+'Serial Number' = $computerBIOS.SerialNumber
+ CPU = $computerCPU.Name
+'HDD Capacity' = $computerHDDCapacity
+'HDD Space' = $computerHDDSpace
+ RAM = $computerRAM
+'Operating System' = $computerOSInfo
+'User Logged In' = $computerSystem.UserName
+'Last Reboot' = $computerOS.LastBootUpTime
+ Failcode = $failCode
+ Hostname = $name
+'Time Of Running' = $time
+}
+ $computerObject | Export-CSV $outputFile -notype -Append
+}
+##
+##Run If/Else Queries. The shortcut to Calc is a substitute for the Hyperdrive Full Client.
+##
+##
+If($osversion -eq 'Microsoft Windows 7 Enterprise')
+{$failCode = "No good! OS is too old! Creating a Citrix Hyperdrive icon!"
+$WshShell = New-Object -comObject WScript.Shell
+$shortcut = $WshShell.CreateShortcut("$Home\$path")
+$shortcut.TargetPath = "$ctx"
+$shortcut.Arguments = "-launch, -reg $ctxEpic"
+$shortcut.Save()
+Write-Log
+}
+ElseIf($ram -lt 7)
+{
+$failCode = "No good! Not enough RAM! Creating a Citrix Hyperdrive icon!"
+$WshShell = New-Object -comObject WScript.Shell
+$shortcut = $WshShell.CreateShortcut("$Home\$path")
+$shortcut.TargetPath = "$ctx"
+$shortcut.Arguments = "-launch -reg $ctxEpic"
+$shortcut.Save()
+Write-Log
+}
+ElseIf($name -like 'WES*') 
+{
+$failCode = "No good! This is a WYSE device! Creating a Citrix Hyperdrive icon!"
+$WshShell = New-Object -comObject WScript.Shell
+$shortcut = $WshShell.CreateShortcut("$Home\$path")
+$shortcut.TargetPath = "$ctx"
+$shortcut.Arguments = "-launch -reg $ctxEpic"
+$shortcut.Save()
+Write-Log
+}
+ElseIf($cpuCore -lt 2)
+{
+$failCode = "No good! CPU core count is less than 4! Creating a Citrix Hyperdrive icon!"
+$WshShell = New-Object -comObject WScript.Shell
+$shortcut = $WshShell.CreateShortcut("$Home\$path")
+$shortcut.TargetPath = "$ctx"
+$shortcut.Arguments = "-launch -reg $ctxEpic"
+$shortcut.Save()
+Write-Log
+}
+ElseIf($cpuClock -lt 2600)
+{
+$failCode = "No good! CPU clock speed is less than 2.7GHz! Creating a Citrix Hyperdrive icon!"
+$WshShell = New-Object -comObject WScript.Shell
+$shortcut = $WshShell.CreateShortcut("$Home\$path")
+$shortcut.TargetPath = "$ctx"
+$shortcut.Arguments = "-launch -reg $ctxEpic"
+$shortcut.Save()
+Write-Log
+}
+Else
+{
+Write-Host "Hooray! This machine meets the right pre-reqs to create a Hyperdrive Full Client icon!"
+##Start-Process -FilePath "SatelliteSetup.exe" -ArgumentList "Bunch of activation key schtuff"
+$WshShell = New-Object -comObject WScript.Shell
+$shortcut = $WshShell.CreateShortcut("$Home\$path")
+$shortcut.TargetPath = "$fullEpic"
+$shortcut.Save()
+}
